@@ -347,7 +347,13 @@ data_src = st.sidebar.radio("Data source", ["Auto-download", "Upload CSV"])
 years = st.sidebar.slider("Years of history (auto)", 1, 20, 5)
 half_life = st.sidebar.slider("Recency half-life (days)", 30, 365, 180, step=15)
 num_tix = st.sidebar.slider("Candidate tickets", 5, 30, 12, step=1)
-seed = st.sidebar.number_input("Random seed", value=123, step=1)
+seed = st.sidebar.number_input(
+    "Random seed",
+    value=123,
+    step=1,
+    key="random_seed",
+    help="Change this value to generate different number combinations. Press Enter or click outside the field to update.",
+)
 show_cooccur = st.sidebar.checkbox(
     "Show pair co-occurrence heatmap (69×69)", value=False
 )
@@ -660,7 +666,17 @@ with tab5:
         "**Based on:** Recency weighting, frequency analysis, pair correlations, and streak patterns"
     )
 
-    # Generate the games
+    # Regenerate button to force update when seed changes
+    col1, col2 = st.columns([3, 1])
+    with col1:
+        st.caption(
+            f"Current seed: **{seed}** - Change seed in sidebar and numbers will update automatically"
+        )
+    with col2:
+        if st.button("🔄 Regenerate", use_container_width=True):
+            st.rerun()
+
+    # Generate the games (using current seed value)
     statistical_games = generate_statistical_games(n_games=10)
 
     # Create DataFrame for clean display

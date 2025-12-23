@@ -9,6 +9,8 @@ Both apps are intended for educational visualizations. Lottery draws are random;
 
 ## Quick start
 
+Requirements: Python 3.9+ and Streamlit (installed via `requirements.txt`).
+
 1. Create and activate a virtual environment (optional but recommended).
 2. Install dependencies:
 
@@ -29,6 +31,15 @@ Both apps are intended for educational visualizations. Lottery draws are random;
 
 Streamlit will print a local URL to open the app in your browser.
 
+### Typical workflow inside the app
+
+1. Choose a data source on the sidebar:
+   - **Auto-download** to pull the latest drawings from the New York Open Data feed.
+   - **Upload CSV** if you have your own history file (see format below).
+2. Pick the analysis options you want to render (frequency, recency weighting, co-occurrence charts, etc.).
+3. Use the candidate ticket generator to create sample plays. You can adjust how numbers are balanced and filter out duplicates.
+4. Download any generated tickets or reports (CSV/PDF/HTML) directly from the app.
+
 ## Using your own data
 
 Both apps can auto-download recent drawings from the New York Open Data feeds, or you can upload a CSV with the following columns:
@@ -38,6 +49,14 @@ Both apps can auto-download recent drawings from the New York Open Data feeds, o
 - `mega` – Mega Ball/Powerball number.
 
 Column names are case-insensitive; the apps will sort the data by date automatically.
+
+Example CSV (Mega Millions):
+
+```csv
+date,w1,w2,w3,w4,w5,mega
+2024-07-02,9,13,27,31,45,4
+2024-06-28,2,18,21,32,44,14
+```
 
 ## Key features
 

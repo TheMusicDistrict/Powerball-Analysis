@@ -491,9 +491,28 @@ We then analyze if these virtual seeds show any patterns over time.
             seed_df.tail(lookback_draws), patterns
         )
 
+        # Assign methods to past drawings (for display)
+        # Run a quick backtest to assign methods to recent draws
+        if len(seed_df) >= 50:
+            method_assignments = backtest_seed_methods(
+                seed_df,
+                min_lookback=min(50, len(seed_df) // 2),
+                step=max(1, len(seed_df) // 100),
+            )
+            # Merge method assignments back into seed_df
+            if not method_assignments.empty:
+                seed_df = seed_df.merge(
+                    method_assignments[["draw_index", "best_method", "best_error"]],
+                    on="draw_index",
+                    how="left",
+                )
+
     # Display virtual seed history
     st.markdown("#### Virtual Seed Timeline (Most Recent 20)")
-    recent_seeds = seed_df.tail(20)[["date", "numbers", "virtual_seed"]]
+    display_cols = ["date", "numbers", "virtual_seed"]
+    if "best_method" in seed_df.columns:
+        display_cols.append("best_method")
+    recent_seeds = seed_df.tail(20)[display_cols]
     st.dataframe(recent_seeds, use_container_width=True, hide_index=True)
 
     # Visualize seed evolution

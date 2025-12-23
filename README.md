@@ -31,6 +31,14 @@ Requirements: Python 3.9+ and Streamlit (installed via `requirements.txt`).
 
 Streamlit will print a local URL to open the app in your browser.
 
+### Recommended next steps for first-time users
+
+1. Run `streamlit run streamlit_app.py` to see the Mega Millions dashboard first—it has the lightest feature set and is easiest to explore.
+2. In the browser tab that opens, click **Auto-download** on the sidebar to pull sample data without hunting for CSVs.
+3. Toggle a few charts (frequency and recency-weighted views) to understand what each visualization shows.
+4. Generate a small batch of tickets (10–20) and download them as CSV to confirm the export flow.
+5. When comfortable, switch to `Powerballv2.py` for the advanced Powerball analysis and the Virtual Seeds experiments.
+
 ### Typical workflow inside the app
 
 1. Choose a data source on the sidebar:

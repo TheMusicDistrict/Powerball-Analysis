@@ -2,6 +2,11 @@
 # VIRTUAL SEED ASSIGNMENT - Pattern Detection in Historical Draws
 # ============================================================
 
+import os
+
+# Fix KMeans memory leak warning on Windows
+os.environ["OMP_NUM_THREADS"] = "1"
+
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -373,6 +378,61 @@ def predict_next_seed_from_patterns(seed_df, patterns, n_predictions=5):
     return predictions
 
 
+def backtest_seed_methods(seed_df, min_lookback=50, step=1):
+    """
+    Walks forward through history and, for each draw, asks:
+    'Based on ONLY the past seeds, which method would have come
+    closest to the next seed?'
+
+    Returns a DataFrame with one row per evaluated draw.
+    """
+    records = []
+
+    # We need at least min_lookback draws before we start testing
+    for t in range(min_lookback, len(seed_df), step):
+        history_window = seed_df.iloc[:t].copy()
+
+        # Detect patterns on past-only data
+        patterns = detect_seed_patterns(history_window, lookback=min_lookback)
+
+        # Predict next seed from those patterns (using only recent part)
+        preds = predict_next_seed_from_patterns(
+            history_window.tail(min_lookback), patterns
+        )
+
+        if not preds:
+            continue  # nothing to evaluate
+
+        # Actual next seed at time t
+        actual_row = seed_df.iloc[t]
+        actual_seed = int(actual_row["virtual_seed"])
+
+        # Compute absolute error for each method
+        method_errors = {
+            method: abs(int(pred) - actual_seed) for method, pred in preds.items()
+        }
+
+        # Find "winner" for this draw
+        best_method, best_error = min(method_errors.items(), key=lambda kv: kv[1])
+
+        record = {
+            "draw_index": int(actual_row["draw_index"]),
+            "date": actual_row["date"],
+            "virtual_seed": actual_seed,
+            "best_method": best_method,
+            "best_error": best_error,
+        }
+
+        # Optionally store each method's prediction/error too
+        for method, pred in preds.items():
+            record[f"pred_{method}"] = int(pred)
+            record[f"err_{method}"] = method_errors[method]
+
+        records.append(record)
+
+    return pd.DataFrame(records)
+
+
 # ============================================================
 # COMPLETE VISUALIZATION SECTION
 # ============================================================
@@ -568,6 +628,56 @@ We then analyze if these virtual seeds show any patterns over time.
 
     else:
         st.warning("No strong patterns detected for prediction")
+
+    # Method Backtest Section
+    st.markdown("---")
+    with st.expander(
+        "📊 Method Backtest (Which method fit past draws best?)", expanded=False
+    ):
+        bt_lookback = st.slider(
+            "Minimum lookback per test (draws used to detect patterns at each step):",
+            30,
+            150,
+            60,
+            step=10,
+            help="For each historical test, we use this many past draws to detect patterns "
+            "before predicting the next seed.",
+        )
+
+        bt_step = st.selectbox(
+            "Evaluate every Nth draw (for speed):",
+            [1, 2, 3, 5],
+            index=1,
+            help="Step of 1 = test every draw, step of 2 = every other draw, etc.",
+        )
+
+        with st.spinner("Running backtest of methods over seed history..."):
+            bt_df = backtest_seed_methods(
+                seed_df, min_lookback=bt_lookback, step=bt_step
+            )
+
+        if bt_df.empty:
+            st.warning(
+                "Not enough history to run this backtest with the current settings."
+            )
+        else:
+            st.markdown("#### Best Method by Draw (Most Recent 50 tests)")
+            st.dataframe(
+                bt_df.tail(50)[["date", "virtual_seed", "best_method", "best_error"]],
+                use_container_width=True,
+                hide_index=True,
+            )
+
+            st.markdown("#### Method Win Counts (across tested draws)")
+            win_counts = bt_df["best_method"].value_counts().reset_index()
+            win_counts.columns = ["Method", "Wins"]
+            st.bar_chart(win_counts.set_index("Method")["Wins"])
+
+            st.caption(
+                "This backtest is purely exploratory. It shows which *pattern method* "
+                "would have been closest to past seeds, but it **does not** create any "
+                "predictive edge for future lottery draws."
+            )
 
     # Pattern strength summary
     st.markdown("---")

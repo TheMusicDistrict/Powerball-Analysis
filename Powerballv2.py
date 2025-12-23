@@ -355,6 +355,7 @@ data_src = st.sidebar.radio("Data source", ["Auto-download", "Upload CSV"])
 years = st.sidebar.slider("Years of history (auto)", 1, 20, 5)
 half_life = st.sidebar.slider("Recency half-life (days)", 30, 365, 180, step=15)
 num_tix = st.sidebar.slider("Candidate tickets", 5, 30, 12, step=1)
+
 seed = st.sidebar.number_input(
     "Random seed",
     value=123,
@@ -580,7 +581,7 @@ with tab5:
     # TOP 10 GAMES - ADVANCED STATISTICAL ANALYSIS
     # ============================================================
 
-    def generate_statistical_games(n_games=10):
+    def generate_statistical_games(n_games=10, seed_value=123):
         """
         Generate games using multiple statistical factors:
         - Recency weighting
@@ -631,7 +632,7 @@ with tab5:
         )
 
         # Generate diverse games from top scored numbers
-        rng = np.random.default_rng(seed)
+        rng = np.random.default_rng(seed_value)
 
         for game_idx in range(n_games):
             # Pick from top scored with some randomization
@@ -685,11 +686,11 @@ with tab5:
             f"Current seed: **{seed}** - Change seed in sidebar and numbers will update automatically"
         )
     with col2:
-        if st.button("🔄 Regenerate", use_container_width=True):
+        if st.button("🔄 Regenerate", use_container_width=True, key="regenerate_stats"):
             st.rerun()
 
-    # Generate the games (using current seed value)
-    statistical_games = generate_statistical_games(n_games=10)
+    # Generate the games (using current seed value - pass explicitly for reactivity)
+    statistical_games = generate_statistical_games(n_games=10, seed_value=seed)
 
     # Create DataFrame for clean display
     df_statistical = pd.DataFrame(
@@ -704,11 +705,12 @@ with tab5:
         ]
     )
 
-    # Display the table
+    # Display the table (key includes seed to force update when seed changes)
     st.dataframe(
         df_statistical[["Game", "White Balls", "Powerball"]],
         use_container_width=True,
         hide_index=True,
+        key=f"statistical_games_{seed}",
     )
 
     # Methodology explanation

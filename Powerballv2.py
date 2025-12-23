@@ -13,6 +13,14 @@ from datetime import datetime, timedelta
 from io import StringIO
 from scipy import stats
 
+# Import seed analysis module
+try:
+    from Seeds import render_seed_analysis
+
+    SEEDS_AVAILABLE = True
+except ImportError:
+    SEEDS_AVAILABLE = False
+
 WHITE_MAX = 69
 MEGA_MAX = 26  # Powerball max
 NY_OD_URL = "https://data.ny.gov/api/views/d6yy-54nr/rows.csv?accessType=DOWNLOAD"
@@ -408,16 +416,20 @@ white_streaks, mega_streaks = analyze_streaks(df)
 top_pairs = pair_correlation_strength(df, top_n=15)
 
 # ---------- Layout ----------
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
-    [
-        "Overview",
-        "Randomness Tests",
-        "Heat Maps",
-        "Advanced Analysis",
-        "Tickets",
-        "Exports",
-    ]
-)
+tab_labels = [
+    "Overview",
+    "Randomness Tests",
+    "Heat Maps",
+    "Advanced Analysis",
+    "Tickets",
+    "Exports",
+]
+if SEEDS_AVAILABLE:
+    tab_labels.append("Virtual Seeds")
+
+tab1, tab2, tab3, tab4, tab5, tab6, *rest_tabs = st.tabs(tab_labels)
+if SEEDS_AVAILABLE:
+    tab7 = rest_tabs[0]
 
 with tab1:
     c1, c2 = st.columns(2)
@@ -1010,6 +1022,10 @@ with tab6:
     except Exception as e:
         st.error(f"Error generating HTML: {e}")
         st.exception(e)
+
+if SEEDS_AVAILABLE:
+    with tab7:
+        render_seed_analysis(df, w_recent, m_recent, sample_tickets_from_probs)
 
 st.markdown("---")
 st.caption(

@@ -15,7 +15,13 @@ from scipy import stats
 
 # Import seed analysis module
 try:
-    from Seeds import render_seed_analysis
+    from Seeds import (
+        render_seed_analysis,
+        assign_virtual_seeds_to_history,
+        detect_seed_patterns,
+        predict_next_seed_from_patterns,
+        backtest_seed_methods,
+    )
 
     SEEDS_AVAILABLE = True
 except ImportError:
@@ -760,6 +766,233 @@ with tab5:
     st.info(
         "💡 **Tip**: Change the 'Random seed' in the sidebar to generate different game combinations using the same statistical criteria."
     )
+
+    # ============================================================
+    # VIRTUAL SEEDS METHOD SELECTOR
+    # ============================================================
+    if SEEDS_AVAILABLE:
+        st.markdown("---")
+        st.markdown("### 🧬 Tickets from Virtual Seeds Methods")
+        st.markdown(
+            "**Generate tickets using pattern-based seed prediction methods from the Virtual Seeds analysis.**"
+        )
+
+        # Method selection
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            signature_type = st.selectbox(
+                "Signature Method:",
+                [
+                    "master_signature",
+                    "sum_signature",
+                    "odd_even_signature",
+                    "low_high_signature",
+                    "prime_signature",
+                    "modulo_signature",
+                ],
+                help="Different ways to convert draw numbers into a virtual seed",
+            )
+        with col2:
+            vs_lookback = st.slider(
+                "Lookback draws:",
+                30,
+                200,
+                100,
+                step=10,
+                help="Number of recent draws to analyze for patterns",
+            )
+
+        # Get predictions
+        with st.spinner("Analyzing patterns and predicting seeds..."):
+            seed_df = assign_virtual_seeds_to_history(df, use_signature=signature_type)
+            patterns = detect_seed_patterns(seed_df, lookback=vs_lookback)
+            predictions = predict_next_seed_from_patterns(
+                seed_df.tail(vs_lookback), patterns
+            )
+
+        if predictions:
+            # Method selector
+            available_methods = list(predictions.keys())
+            selected_method = st.selectbox(
+                "Choose Prediction Method:",
+                available_methods,
+                help="Each method predicts a virtual seed based on different pattern analysis. "
+                "Tickets will be generated using that predicted seed.",
+            )
+
+            if selected_method:
+                pred_seed = predictions[selected_method]
+
+                # Get historical error statistics for this method
+                with st.spinner("Calculating historical error statistics..."):
+                    bt_df = backtest_seed_methods(
+                        seed_df,
+                        min_lookback=min(50, vs_lookback),
+                        step=max(1, len(seed_df) // 100),
+                    )
+
+                    # Calculate average error for this specific method
+                    method_error_col = f"err_{selected_method}"
+                    if not bt_df.empty and method_error_col in bt_df.columns:
+                        avg_error = bt_df[method_error_col].mean()
+                        median_error = bt_df[method_error_col].median()
+                        min_error = bt_df[method_error_col].min()
+                        max_error = bt_df[method_error_col].max()
+                        method_wins = (bt_df["best_method"] == selected_method).sum()
+                        total_tests = len(bt_df)
+                        win_rate = (
+                            (method_wins / total_tests * 100) if total_tests > 0 else 0
+                        )
+                    else:
+                        avg_error = None
+                        median_error = None
+                        min_error = None
+                        max_error = None
+                        win_rate = None
+
+                # Display prediction and error info
+                col1, col2 = st.columns([2, 1])
+                with col1:
+                    error_info = (
+                        f"**{selected_method}** predicted seed: **{pred_seed}**"
+                    )
+                    if avg_error is not None:
+                        error_info += "\n\n📊 **Historical Performance:**\n"
+                        error_info += f"- Average error: **{avg_error:.1f}** (out of 0-9999 range)\n"
+                        error_info += f"- Median error: **{median_error:.1f}**\n"
+                        error_info += (
+                            f"- Error range: {min_error:.0f} - {max_error:.0f}\n"
+                        )
+                        error_info += f"- Win rate: **{win_rate:.1f}%** ({method_wins}/{total_tests} draws)"
+                    st.info(error_info)
+                with col2:
+                    st.caption(f"Using randomization seed: {seed}")
+
+                # Generate tickets using the predicted seed
+                num_vs_tickets = st.slider(
+                    "Number of tickets per seed variant:",
+                    1,
+                    10,
+                    3,
+                    step=1,
+                    key="vs_tickets_count",
+                )
+
+                # Generate tickets with error adjustments
+                seed_variants = {}
+
+                # Base prediction
+                seed_variants[f"Base ({pred_seed})"] = pred_seed
+
+                # Error-adjusted seeds
+                if avg_error is not None:
+                    # Add error (predicted + average error)
+                    seed_plus_error = int((pred_seed + avg_error) % 10000)
+                    seed_variants[f"+Error ({seed_plus_error})"] = seed_plus_error
+
+                    # Subtract error (predicted - average error)
+                    seed_minus_error = int((pred_seed - avg_error) % 10000)
+                    seed_variants[f"-Error ({seed_minus_error})"] = seed_minus_error
+
+                    # Half error adjustments
+                    seed_plus_half = int((pred_seed + avg_error / 2) % 10000)
+                    seed_variants[f"+Half Error ({seed_plus_half})"] = seed_plus_half
+
+                    seed_minus_half = int((pred_seed - avg_error / 2) % 10000)
+                    seed_variants[f"-Half Error ({seed_minus_half})"] = seed_minus_half
+                else:
+                    # If no error data, just show base
+                    pass
+
+                # Display option to show/hide error variants
+                show_error_variants = st.checkbox(
+                    "Show error-adjusted seed variants",
+                    value=True,
+                    help="Generate tickets using predicted seed ± error adjustments based on historical performance",
+                )
+
+                if show_error_variants and avg_error is not None:
+                    variants_to_show = seed_variants
+                else:
+                    variants_to_show = {f"Base ({pred_seed})": pred_seed}
+
+                # Generate and display tickets for each variant
+                all_tickets_data = []
+                for variant_name, variant_seed in variants_to_show.items():
+                    vs_tickets = sample_tickets_from_probs(
+                        w_recent,
+                        m_recent,
+                        k_tickets=num_vs_tickets,
+                        seed=variant_seed,
+                    )
+
+                    for i, (w, m) in enumerate(vs_tickets):
+                        all_tickets_data.append(
+                            {
+                                "Variant": variant_name,
+                                "Ticket": i + 1,
+                                "White Balls": f"{w[0]:2d} - {w[1]:2d} - {w[2]:2d} - {w[3]:2d} - {w[4]:2d}",
+                                "Powerball": f"{m:02d}",
+                                "Raw": f"{w[0]}, {w[1]}, {w[2]}, {w[3]}, {w[4]}, PB:{m}",
+                            }
+                        )
+
+                df_vs = pd.DataFrame(all_tickets_data)
+
+                # Display tickets
+                if len(variants_to_show) > 1:
+                    # Show with variant column
+                    st.dataframe(
+                        df_vs[["Variant", "Ticket", "White Balls", "Powerball"]],
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"vs_tickets_{selected_method}_{pred_seed}",
+                    )
+                else:
+                    # Show without variant column
+                    st.dataframe(
+                        df_vs[["Ticket", "White Balls", "Powerball"]],
+                        use_container_width=True,
+                        hide_index=True,
+                        key=f"vs_tickets_{selected_method}_{pred_seed}",
+                    )
+
+                # Download button
+                st.download_button(
+                    f"⬇️ Download {selected_method} Tickets (CSV)",
+                    data=df_to_csv_bytes(
+                        df_vs[["Ticket", "Raw"]].rename(columns={"Raw": "Numbers"})
+                    ),
+                    file_name=f"tickets_{selected_method.lower().replace(' ', '_')}.csv",
+                    use_container_width=True,
+                )
+
+                with st.expander(f"📖 About {selected_method}"):
+                    method_descriptions = {
+                        "Linear Trend": "Extrapolates seed values based on a linear trend detected in recent draws.",
+                        "Oscillation": "Predicts seed based on detected sine wave patterns in seed evolution.",
+                        "Cycle-": "Uses repeating cycle patterns - looks back one cycle length to predict next seed.",
+                        "Autocorr-": "Uses autocorrelation - predicts seed based on correlation with previous seeds at specific lags.",
+                        "Range Pattern": "Predicts seed within the most frequently occurring seed range.",
+                        "Ensemble": "Weighted average of all available methods, weighted by their pattern strength.",
+                    }
+                    desc = next(
+                        (
+                            v
+                            for k, v in method_descriptions.items()
+                            if selected_method.startswith(k)
+                        ),
+                        "Pattern-based seed prediction method.",
+                    )
+                    st.markdown(f"**{selected_method}**: {desc}")
+                    st.markdown(
+                        f"**Predicted Seed**: {pred_seed}  \n"
+                        f"**Pattern Strength**: {patterns.get('linear_trend', {}).get('strength', 0)*100:.1f}% (if applicable)"
+                    )
+        else:
+            st.warning(
+                "No strong patterns detected. Try adjusting the lookback period or signature method."
+            )
 
     st.markdown("---")
     st.markdown("### 🎲 Other Ticket Generation Methods")
